@@ -15,6 +15,7 @@ import (
 	"kampiun/internal/config"
 	"kampiun/internal/httpapi"
 	authjwt "kampiun/kernel/auth"
+	"kampiun/kernel/email"
 	"kampiun/kernel/notify"
 	"kampiun/kernel/pgdb"
 	"kampiun/kernel/realtime"
@@ -69,9 +70,17 @@ func run(cfg config.Config) error {
 		return err
 	}
 
-	// services
+	// services — notifier: email (SMTP) bila dikonfigurasi, else Nop.
 	nop := notify.Nop{}
-	authSvc := service.NewAuth(repo, hasher, tokens, nop)
+	emailCfg := email.Config{
+		Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser, Pass: cfg.SMTPPass,
+		From: cfg.SMTPFrom, FromName: cfg.SMTPFromName,
+	}
+	var authNotifier notify.Notifier = nop
+	if emailCfg.Enabled() {
+		authNotifier = email.New(emailCfg, cfg.AdminEmail, lg)
+	}
+	authSvc := service.NewAuth(repo, hasher, tokens, authNotifier)
 	orgSvc := service.NewOrgService(repo)
 	compSvc := service.NewCompService(repo)
 	scoreSvc := service.NewScoreService(repo, hub, lg)
