@@ -86,6 +86,7 @@ func run(cfg config.Config) error {
 	mux.HandleFunc("POST /api/v1/auth/register", authAPI.HandleRegister)
 	mux.HandleFunc("POST /api/v1/auth/login", authAPI.HandleLogin)
 	mux.HandleFunc("GET /api/v1/competitions/public", compAPI.HandlePubicSearch)
+	mux.HandleFunc("GET /api/v1/matches/{id}", scoreAPI.HandleMatchGet)
 	mux.HandleFunc("GET /api/v1/matches/{id}/score", scoreAPI.HandleScoreGet)
 
 	// auth

@@ -4,26 +4,31 @@ import { ref, onMounted, onUnmounted } from 'vue'
 const props = defineProps({ id: String })
 
 const data = ref(null)
+const match = ref(null)
 const err = ref('')
 const loading = ref(true)
 let timer = null
 
+async function fetchMatch() {
+  try {
+    const r = await fetch(`/api/v1/matches/${props.id}`)
+    if (!r.ok) throw new Error('pertandingan tidak ditemukan')
+    match.value = await r.json()
+  } catch (e) { err.value = e.message }
+}
+
 async function fetchScore() {
   try {
     const r = await fetch(`/api/v1/matches/${props.id}/score`)
-    if (!r.ok) throw new Error('match tidak ditemukan atau belum ada skor')
+    if (!r.ok) throw new Error('belum ada skor / pertandingan tidak ditemukan')
     data.value = await r.json()
-    err.value = ''
-  } catch (e) {
-    err.value = e.message
-  } finally {
-    loading.value = false
-  }
+  } catch (e) { if (!err.value) err.value = e.message }
 }
 
 onMounted(() => {
+  fetchMatch()
   fetchScore()
-  timer = setInterval(fetchScore, 3000)
+  timer = setInterval(() => { fetchMatch(); fetchScore() }, 3000)
 })
 onUnmounted(() => clearInterval(timer))
 </script>
@@ -40,18 +45,21 @@ onUnmounted(() => clearInterval(timer))
     <p v-else-if="err" class="err">{{ err }}</p>
 
     <div v-else class="board">
-      <div class="side home">
-        <span class="name">Tim A</span>
+      <div class="side" :class="match?.home ? '' : 'empty'">
+        <span class="name">{{ match?.home?.name ?? 'Tim A' }}</span>
         <span class="sets">Set: {{ data?.HomeWon }}</span>
+        <span v-if="data?.Finished && data?.HomeWon > data?.AwayWon" class="winer">🏆 pemenang</span>
       </div>
       <div class="mid">
         <span class="big">{{ data?.HomeUnits?.at(-1) ?? '–' }}</span>
         <span class="sep">:</span>
         <span class="big">{{ data?.AwayUnits?.at(-1) ?? '–' }}</span>
+        <span v-if="data?.Finished" class="done-label">SELESAI</span>
       </div>
-      <div class="side away">
-        <span class="name">Tim B</span>
+      <div class="side" :class="match?.away ? '' : 'empty'">
+        <span class="name">{{ match?.away?.name ?? 'Tim B' }}</span>
         <span class="sets">Set: {{ data?.AwayWon }}</span>
+        <span v-if="data?.Finished && data?.AwayWon > data?.HomeWon" class="winer">🏆 pemenang</span>
       </div>
     </div>
   </div>
@@ -67,13 +75,17 @@ onUnmounted(() => clearInterval(timer))
 .err { color: #e74c3c; }
 .board { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; }
 .side { text-align: center; padding: 32px; border-radius: 16px; color: white; }
-.side.home { background: #4f46e5; }
-.side.away { background: #e74c3c; }
+.side { text-align: center; padding: 32px; border-radius: 16px; color: white; }
+.side:first-child { background: #4f46e5; }
+.side:last-child { background: #e74c3c; }
+.side.empty { background: #888; }
 .name { display: block; font-size: 20px; font-weight: 700; }
 .sets { display: block; margin-top: 8px; opacity: 0.85; font-size: 14px; }
 .mid { display: flex; align-items: center; gap: 8px; }
 .big { font-size: 56px; font-weight: 800; }
 .sep { font-size: 56px; color: #999; }
+.winer { display: block; margin-top: 12px; font-weight: 700; }
+.done-label { position: absolute; font-size: 13px; color: #2ecc71; font-weight: 700; margin-left: 12px; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 .muted { color: #888; }
 </style>
