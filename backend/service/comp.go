@@ -54,6 +54,10 @@ func (s *CompService) CreateParticipants(ctx context.Context, compID string, nam
 	if len(names) < 2 {
 		return nil, domain.ErrInvalid
 	}
+	// guard: tolak bila peserta sudah ada (hindari duplikat + regenerate bracket)
+	if existing, err := s.repo.PartsByComp(compID); err == nil && len(existing) > 0 {
+		return nil, domain.ErrDuplicate
+	}
 	parts := make([]domain.Participant, 0, len(names))
 	for i, n := range names {
 		n = strings.TrimSpace(n)
