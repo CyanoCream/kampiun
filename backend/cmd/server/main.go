@@ -17,6 +17,7 @@ import (
 	authjwt "kampiun/kernel/auth"
 	"kampiun/kernel/notify"
 	"kampiun/kernel/pgdb"
+	"kampiun/kernel/realtime"
 	"kampiun/kernel/security"
 	"kampiun/service"
 )
@@ -52,6 +53,8 @@ func run(cfg config.Config) error {
 
 	repo := pgdb.NewRepo(pool)
 	hasher := security.NewBcryptHasher()
+	hub := realtime.NewHub(cfg.RedisAddr, lg)
+	defer hub.Close()
 
 	ttl, err := time.ParseDuration(cfg.JWTAccessTTL)
 	if err != nil {
@@ -71,7 +74,7 @@ func run(cfg config.Config) error {
 	authSvc := service.NewAuth(repo, hasher, tokens, nop)
 	orgSvc := service.NewOrgService(repo)
 	compSvc := service.NewCompService(repo)
-	scoreSvc := service.NewScoreService(repo)
+	scoreSvc := service.NewScoreService(repo, hub, lg)
 
 	// http
 	authAPI := httpapi.NewAuthAPI(authSvc)
@@ -88,6 +91,9 @@ func run(cfg config.Config) error {
 	mux.HandleFunc("GET /api/v1/competitions/public", compAPI.HandlePubicSearch)
 	mux.HandleFunc("GET /api/v1/matches/{id}", scoreAPI.HandleMatchGet)
 	mux.HandleFunc("GET /api/v1/matches/{id}/score", scoreAPI.HandleScoreGet)
+	mux.HandleFunc("GET /api/v1/matches/{id}/ws", func(w http.ResponseWriter, r *http.Request) {
+		hub.ServeWS(w, r, r.PathValue("id"))
+	})
 
 	// auth
 	mux.Handle("GET /api/v1/orgs", httpapi.MiddlewareAuth(tokens, http.HandlerFunc(orgAPI.HandleList)))

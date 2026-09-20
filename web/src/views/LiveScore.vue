@@ -7,7 +7,7 @@ const data = ref(null)
 const match = ref(null)
 const err = ref('')
 const loading = ref(true)
-let timer = null
+let ws = null
 
 async function fetchMatch() {
   try {
@@ -22,15 +22,23 @@ async function fetchScore() {
     const r = await fetch(`/api/v1/matches/${props.id}/score`)
     if (!r.ok) throw new Error('belum ada skor / pertandingan tidak ditemukan')
     data.value = await r.json()
+    loading.value = false
   } catch (e) { if (!err.value) err.value = e.message }
+}
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  ws = new WebSocket(`${proto}://${location.host}/api/v1/matches/${props.id}/ws`)
+  ws.onmessage = (ev) => { data.value = JSON.parse(ev.data) }
+  ws.onclose = () => { if (!data.value?.Finished) setTimeout(connectWS, 2000) } // reconnect
 }
 
 onMounted(() => {
   fetchMatch()
   fetchScore()
-  timer = setInterval(() => { fetchMatch(); fetchScore() }, 3000)
+  connectWS()
 })
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => { if (ws) ws.close() })
 </script>
 
 <template>
@@ -51,9 +59,9 @@ onUnmounted(() => clearInterval(timer))
         <span v-if="data?.Finished && data?.HomeWon > data?.AwayWon" class="winer">🏆 pemenang</span>
       </div>
       <div class="mid">
-        <span class="big">{{ data?.HomeUnits?.at(-1) ?? '–' }}</span>
+        <span class="big">{{ data?.HomeScore ?? '–' }}</span>
         <span class="sep">:</span>
-        <span class="big">{{ data?.AwayUnits?.at(-1) ?? '–' }}</span>
+        <span class="big">{{ data?.AwayScore ?? '–' }}</span>
         <span v-if="data?.Finished" class="done-label">SELESAI</span>
       </div>
       <div class="side" :class="match?.away ? '' : 'empty'">

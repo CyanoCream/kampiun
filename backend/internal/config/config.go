@@ -14,6 +14,7 @@ type Config struct {
 	StorageDir  string
 	AdminEmail  string
 	SeedPassword string
+	RedisAddr   string
 	TelegramBotToken string
 	TelegramChatIDs  []int64
 }
@@ -27,6 +28,7 @@ func Load() Config {
 		StorageDir:      getenv("STORAGE_DIR", "storage/proofs"),
 		AdminEmail:      getenv("ADMIN_EMAIL", "admin@example.com"),
 		SeedPassword:    getenv("SEED_ADMIN_PASSWORD", "admin12345"),
+		RedisAddr:       getenv("REDIS_ADDR", "localhost:6379"),
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramChatIDs: splitInt64(os.Getenv("TELEGRAM_CHAT_IDS")),
 	}

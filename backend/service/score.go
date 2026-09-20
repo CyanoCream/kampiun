@@ -2,16 +2,45 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
 	"kampiun/domain"
+	"kampiun/kernel/realtime"
 )
 
 // ScoreService = engine skor tap-tap inti. Stateless terhadap DB (hanya repo).
-type ScoreService struct{ repo domain.Repository }
+type ScoreService struct {
+	repo domain.Repository
+	hub  *realtime.Hub // broadcast skor live (nullable: tanpa hub = polling biasa)
+	log  *slog.Logger
+}
 
-func NewScoreService(repo domain.Repository) *ScoreService { return &ScoreService{repo: repo} }
+func NewScoreService(repo domain.Repository, hub *realtime.Hub, log *slog.Logger) *ScoreService {
+	return &ScoreService{repo: repo, hub: hub, log: log}
+}
+
+// Publish menyiarkan skor terbaru ke channel match (Redis + WS lokal).
+func (s *ScoreService) Publish(ctx context.Context, matchID string) {
+	sc, err := s.Score(ctx, matchID)
+	if err != nil {
+		if s.log != nil {
+			s.log.Error("publish skor", "match", matchID, "err", err)
+		}
+		return
+	}
+	b, err := json.Marshal(sc)
+	if err != nil {
+		return
+	}
+	if s.hub != nil {
+		// siarkan ke Redis (antar instance) + WS lokal
+		_ = s.hub.Publish(ctx, matchID, b)
+		s.hub.BroadcastToLocal(matchID, b)
+	}
+}
 
 // Input membawa satu aksi skor pada match.
 type ScoreInput struct {
@@ -65,12 +94,14 @@ func (s *ScoreService) Apply(ctx context.Context, in ScoreInput) (MatchScore, er
 			return MatchScore{}, err
 		}
 	}
+	s.Publish(ctx, m.ID)
 	return score, nil
 }
 
 // MatchScore = hasil evaluasi skor saat ini.
 type MatchScore struct {
-	HomeUnits, AwayUnits []int
+	HomeUnits, AwayUnits []int // per set yang selesai
+	HomeScore, AwayScore int   // poin aktif set berjalan
 	HomeWon, AwayWon     int
 	Finished             bool
 }
@@ -121,7 +152,8 @@ func eval(c domain.Competition, m domain.Match, events []domain.ScoreEvent) Matc
 	if c.Format.UsesScore && c.Format.BestOf > 0 {
 		finished = homeWon >= c.Format.BestOf/2+1 || awayWon >= c.Format.BestOf/2+1
 	}
-	return MatchScore{HomeUnits: homeUnits, AwayUnits: awayUnits, HomeWon: homeWon, AwayWon: awayWon, Finished: finished}
+	return MatchScore{HomeUnits: homeUnits, AwayUnits: awayUnits, HomeScore: curHome, AwayScore: curAway,
+		HomeWon: homeWon, AwayWon: awayWon, Finished: finished}
 }
 
 // Score returns current live score for a match (untuk viewer).
