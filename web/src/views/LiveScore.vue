@@ -29,8 +29,31 @@ async function fetchScore() {
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   ws = new WebSocket(`${proto}://${location.host}/api/v1/matches/${props.id}/ws`)
-  ws.onmessage = (ev) => { data.value = JSON.parse(ev.data) }
+  ws.onmessage = (ev) => {
+    const sc = JSON.parse(ev.data)
+    // trigger confetti hanya saat transisi ke finished
+    if (sc.Finished && !data.value?.Finished) showConfetti()
+    data.value = sc
+  }
   ws.onclose = () => { if (!data.value?.Finished) setTimeout(connectWS, 2000) } // reconnect
+}
+
+// Confetti ringan: elemen CSS yang jatuh.
+function showConfetti() {
+  const colors = ['#533afd', '#ea2261', '#f96bee', '#15be53', '#f39c12']
+  const wrap = document.createElement('div')
+  wrap.className = 'confetti'
+  document.body.appendChild(wrap)
+  for (let i = 0; i < 60; i++) {
+    const p = document.createElement('div')
+    p.className = 'piece'
+    p.style.left = Math.random() * 100 + '%'
+    p.style.background = colors[i % colors.length]
+    p.style.animationDelay = (Math.random() * 2) + 's'
+    p.style.transform = `rotate(${Math.random() * 360}deg)`
+    wrap.appendChild(p)
+  }
+  setTimeout(() => wrap.remove(), 4000)
 }
 
 onMounted(() => {
@@ -96,4 +119,12 @@ onUnmounted(() => { if (ws) ws.close() })
 .done-label { position: absolute; font-size: 13px; color: #2ecc71; font-weight: 700; margin-left: 12px; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 .muted { color: #888; }
+
+/* confetti */
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 999; }
+.piece {
+  position: absolute; top: -20px; width: 10px; height: 16px; border-radius: 2px;
+  animation: fall 2.6s ease-in forwards;
+}
+@keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
 </style>

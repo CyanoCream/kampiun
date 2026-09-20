@@ -1,12 +1,29 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, RouterLink } from 'vue-router'
 
 const router = useRouter()
 const code = ref('')
-function goCode() {
-  if (code.value.trim()) router.push(`/live/${code.value.trim()}`)
+const query = ref('')
+const sport = ref('')
+const results = ref([])
+const searching = ref(false)
+
+function goCode() { if (code.value.trim()) router.push(`/live/${code.value.trim()}`) }
+
+async function search() {
+  searching.value = true
+  try {
+    const qs = new URLSearchParams()
+    if (query.value) qs.set('q', query.value)
+    if (sport.value) qs.set('sport', sport.value)
+    const r = await fetch(`/api/v1/competitions/public?${qs}`)
+    if (!r.ok) throw new Error()
+    results.value = await r.json()
+  } catch (e) { results.value = [] }
+  finally { searching.value = false }
 }
+onMounted(search)
 </script>
 
 <template>
@@ -35,6 +52,32 @@ function goCode() {
         />
         <button @click="goCode" class="btn primary">Lihat Live</button>
       </div>
+    </section>
+
+    <section id="explore" class="explore">
+      <h2>Jelajahi turnamen</h2>
+      <div class="toolbar">
+        <input v-model="query" placeholder="Cari nama turnamen…" @keyup.enter="search" />
+        <select v-model="sport" @change="search">
+          <option value="">Semua cabang</option>
+          <option value="volleyball">Voli</option>
+          <option value="badminton">Badminton</option>
+          <option value="football">Sepak bola</option>
+          <option value="fishing">Mancing</option>
+        </select>
+        <button class="btn primary" @click="search">{{ searching ? '…' : 'Cari' }}</button>
+      </div>
+      <div v-if="results.length" class="res">
+        <div v-for="c in results" :key="c.id" class="resrow">
+          <div>
+            <strong>{{ c.name }}</strong>
+            <span class="muted"> • {{ c.sport }} • kode {{ c.access_code }}</span>
+          </div>
+          <RouterLink :to="`/bracket/${c.id}`" class="btn ghost sm">Bracket</RouterLink>
+        </div>
+      </div>
+      <p v-else-if="searching" class="muted">Mencari…</p>
+      <p v-else class="muted">Belum ada turnamen publik.</p>
     </section>
 
     <section id="fitur" class="grid">
@@ -87,4 +130,12 @@ input:focus { border-color: #533afd; box-shadow: 0 0 0 2px rgba(83,58,253,0.15);
 .card h3 { margin: 8px 0 8px; font-size: 22px; font-weight: 300; letter-spacing: -0.22px; color: #061b31; }
 .card p { color: #64748d; font-size: 16px; font-weight: 300; line-height: 1.4; margin: 0; }
 footer { text-align: center; padding: 40px 0; font-size: 14px; }
+.explore { padding: 16px 0 48px; }
+.explore h2 { font-weight: 300; letter-spacing: -0.5px; margin-bottom: 8px; }
+.toolbar { display: flex; gap: 10px; margin: 12px 0 20px; flex-wrap: wrap; }
+.toolbar input { flex: 1; min-width: 180px; }
+.toolbar select { padding: 12px 14px; border: 1px solid #e5edf5; border-radius: 4px; font-family: inherit; font-size: 15px; }
+.res { display: flex; flex-direction: column; gap: 10px; }
+.resrow { display: flex; justify-content: space-between; align-items: center; border: 1px solid #e5edf5; border-radius: 6px; padding: 14px 16px; background: #fff; box-shadow: rgba(50,50,93,0.08) 0px 4px 14px; }
+.btn.sm { font-size: 13px; padding: 6px 12px; }
 </style>

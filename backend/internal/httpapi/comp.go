@@ -61,6 +61,45 @@ func (a *CompAPI) HandleAddParticipants(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, parts)
 }
 
+// BracketNode = match dengan nama peserta (utk visualisasi bracket web/mobile).
+type BracketNode struct {
+	Match    domain.Match        `json:"match"`
+	HomeName string             `json:"home_name"`
+	AwayName string             `json:"away_name"`
+}
+
+// HandleBracket = bracket lengkap kompetisi (rounds → matches → nama peserta).
+func (a *CompAPI) HandleBracket(w http.ResponseWriter, r *http.Request) {
+	compID := r.PathValue("id")
+	matches, err := a.repo.MatchesByComp(compID)
+	if err != nil {
+		writeErr(w, statusOf(err), err.Error())
+		return
+	}
+	// nama peserta
+	nameOf := map[string]string{}
+	parts, _ := a.repo.PartsByComp(compID)
+	for _, p := range parts {
+		nameOf[p.ID] = p.Name
+	}
+	// kelompokkan per round
+	byRound := map[int][]BracketNode{}
+	var maxRound int
+	for _, m := range matches {
+		if m.Round > maxRound {
+			maxRound = m.Round
+		}
+		byRound[m.Round] = append(byRound[m.Round], BracketNode{
+			Match: m, HomeName: nameOf[m.HomeID], AwayName: nameOf[m.AwayID],
+		})
+	}
+	rounds := make([]map[string]any, 0, maxRound)
+	for r := 1; r <= maxRound; r++ {
+		rounds = append(rounds, map[string]any{"round": r, "matches": byRound[r]})
+	}
+	writeJSON(w, http.StatusOK, rounds)
+}
+
 func (a *CompAPI) HandlePubicSearch(w http.ResponseWriter, r *http.Request) {
 	comps, err := a.comps.ListPublic(r.Context(), r.URL.Query().Get("sport"), r.URL.Query().Get("q"), 50, 0)
 	if err != nil {
