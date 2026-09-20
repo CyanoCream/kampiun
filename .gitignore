@@ -1,0 +1,5 @@
+backend/server
+backend/*.log
+/tmp/kampiun-server
+backend/storage/
+storage/
